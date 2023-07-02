@@ -1,0 +1,31 @@
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+!.vscode/*.code-snippets
+
+# Local History for Visual Studio Code
+.history/
+
+# Built Visual Studio Code Extensions
+*.vsix
+quantum_nn.pdf
+python_cheat_sheet.pdf
+初年次ゼミナール第二回課題.docx
+8x8_100checkpoints_best.pth.tar
+week2.ipynb
+week3.ipynb
+__pycache__/computer.cpython-39.pyc
+__pycache__/reversi_env.cpython-39.pyc
+checkpoint/checkmoint.pth.tar
+filepath
+refference/cart_pole_nn.py
+refference/cartpole_nn.py
+refference/from_blog.py
+refference/load_trial.py
+refference/NNet.py
+refference/OthelloNNet.py
+refference/params.txt
+refference/play_cart.py
+__pycache__/reversi_nn.cpython-39.pyc
