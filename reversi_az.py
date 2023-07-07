@@ -1,9 +1,11 @@
+#reversi_nn_vdqn.py
+
 import os
 import sys
 import numpy as np
 from collections import deque, namedtuple
 import random
-import copy
+from copy import deepcopy
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -22,7 +24,8 @@ args={
     'channels':128,
     'kernels':2,
     'linears':128,
-    'lr':1e-4,
+    'lr_mc':1e-4,
+    'lr_sim':1e-3,
     'batchs':64
 }
 
@@ -30,6 +33,125 @@ Transition=namedtuple(
     'Transition',
     'state action next_state reward'
 )
+
+
+
+def kaeseru(x,y,board):
+    iro=BLACK
+    if board[y][x]!=0:
+        return False
+    total=0
+    for dy in range(-1,2):
+        for dx in range(-1,2):
+            k=0
+            sx=x
+            sy=y
+            while True:
+                sx+=dx
+                sy+=dy
+                if sx<0 or sx>len(board)-1 or sy<0 or sy>len(board[0])-1:
+                    break
+                if board[sy][sx]==0:
+                    break
+                if board[sy][sx]==3-iro:
+                    k+=1
+                if board[sy][sx]==iro:
+                    total+=k
+                    break
+    return total>0
+
+def mask_kaeseru(board,prediction):
+    for y in range(len(board)):
+        for x in range(len(board[0])):
+            if not kaeseru(x,y,board): prediction[y*len(board)+x]=-1
+    return prediction
+
+def ban_syokika(wx,wy):
+    for y in range(wx):
+        for x in range(wy):
+            board[y][x]=0
+    board[3][4]=BLACK
+    board[4][3]=BLACK
+    board[3][3]=WHITE
+    board[4][4]=WHITE
+    return board
+
+def board_list2tensor(board:list):
+    ret=np.array(copy.deepcopy(board))
+    ret=torch.tensor(ret.astype(np.float32))
+    # contiguous??
+    ret=ret.view(1,1,ret.size()[0],ret.size()[0])
+    return ret
+
+def board_tensor2list(board:torch.tensor,board_x,board_y):
+    board.view(board_x,board_y)
+    return board.tolist()
+
+
+def ishi_utsu(x,y,board,iro):
+    board[y][x]=iro
+    for dy in range(-1,2):
+        for dx in range(-1,2):
+            k=0
+            sx=x
+            sy=y
+            while True:
+                sx+=dx
+                sy+=dy
+                if sx<0 or sx>7 or sy<0 or sy>7:
+                    break
+                if board[sy][sx]==0:
+                    break
+                if board[sy][sx]==3-iro:
+                    k+=1
+                if board[sy][sx]==iro:
+                    for i in range(k):
+                        sx-=dx
+                        sy-=dy
+                        board[sy][sx]=iro
+    return board
+
+def uteru_masu(board):#iro=BLACK
+    for y in range(8):
+        for x in range(8):
+            if kaeseru(x,y,board)>0:
+                return True
+
+    return False
+
+def ishino_kazu(board):
+    b=0
+    w=0
+    for y in range(8):
+        for x in range(8):
+            if board[y][x]==BLACK: b+=1
+            if board[y][x]==WHITE: w+=1
+
+    return b,w
+
+def to_black(board,iro):
+    ret=deepcopy(board)
+    if iro==BLACK:
+        return ret
+    for x in range(len(board)):
+        for y in range(len(board[0])):
+            if ret[y][x]==3-iro: ret[y][x]=iro
+            elif ret[y][x]==iro: ret[y][x]=3-iro
+    return ret
+
+def to_original(board,iro):
+    return to_black(board,iro)
+
+def ex_board(board):
+    ret=deepcopy(board)
+    sy=len(ret)
+    sx=len(ret[0])
+    ret=[[-10]*sx]+ret+[[-10]*sx]
+    for row in ret:
+        row=[-10]+row+[-10]
+    return ret
+
+
 
 class ReplayMemory(object):
     def __init__(self,capacity):
@@ -72,16 +194,43 @@ class NN(nn.Module):
 
         x=self.linear_layers(x)
         #print(x.size())
-        return x
+        #TODO nn model is yet to be implemented with resnet,attention
+        return win_prob
     
     def check_cnn_size(self,size_check):
         out=self.conv_layers(size_check)
         return out.size()
 
-class OthelloAgent8:
+class Node:
+    def __init__(self,board,max_d=5):
+        self.board=board
+        self.children=[]
+        self.win_probs=[]
+        self.visit_time=0
+        self.is_expanded=False
+        self.max_d=max_d
+    
+    def expand(self):
+        if not self.is_expanded and self.max_d>0:
+            for y in range(len(self.board)):
+                for x in range(len(self.board[0])):
+                    if kaeseru(x,y,self.board)>0:
+                        tmp_board=deepcopy(self.board)
+                        tmp_board=ishi_utsu(x,y,board,iro=BLACK)
+                        child_node=Node(tmp_board,max_d=self.max_d-1)
+                        self.children.append(child_node)
+        self.is_expanded=True
+    
+    #TODO is there any method necessary regarding node?
+    def 
+
+    
+
+class AlphaZeroAgent:
     def __init__(self,board_x=8,board_y=8,args=args):#assume that iro=black
-        self.agent_net=NN(board_x,board_y,args).to(device)
-        self.optimizer=optim.AdamW(self.agent_net.parameters(),lr=args['lr'],amsgrad=True)
+        self.agent_net=NN(board_x+2,board_y+2,args).to(device)
+        self.optimizer=optim.AdamW(self.agent_net.parameters(),lr=args['lr_mc'],amsgrad=True)
+        self.optimizer=optim.AdamW(self.agent_net.parameters(),lr=args['lr_sim'],amsgrad=True)
         self.loss=nn.SmoothL1Loss()
         self.memory=ReplayMemory(10000)
         self.board_x=board_x
@@ -90,39 +239,12 @@ class OthelloAgent8:
         self.back=[[0]*self.board_x for _ in range(self.board_y)]
         self.win_probs=[]
         self.win_probs_this_time=[]
+        self.win_boards=[]
+        self.win_boards_this_time=[]
+
 
     def predict(self,state):
         return self.agent_net(state)
-
-    def kaeseru(self,x,y,board):
-        iro=BLACK
-        if board[y][x]!=0:
-            return False
-        total=0
-        for dy in range(-1,2):
-            for dx in range(-1,2):
-                k=0
-                sx=x
-                sy=y
-                while True:
-                    sx+=dx
-                    sy+=dy
-                    if sx<0 or sx>7 or sy<0 or sy>7:
-                        break
-                    if board[sy][sx]==0:
-                        break
-                    if board[sy][sx]==3-iro:
-                        k+=1
-                    if board[sy][sx]==iro:
-                        total+=k
-                        break
-        return total>0
-
-    def mask_kaeseru(self,board,prediction):
-        for y in range(self.board_y):
-            for x in range(self.board_x):
-                if not self.kaeseru(x,y,board): prediction[y*self.board_y+x]=-1
-        return prediction
 
     def select_action(self,board:list,epsilon=0):
         rand_val=random.random()
@@ -155,6 +277,53 @@ class OthelloAgent8:
         # torch.nn.utils.clip_grad_value_(self.agent_net.parameters(),100)
         self.optimizer.step()
 
+    def single_mcts(self,node:Node):
+        
+
+    
+    def mcts(self,parent_node:Node,loops=50):
+        parent_node.expand()
+        win_probs=[]
+        ref_win_probs=self.predict(parent_node.board)
+        for i in range(loops):
+            win_prob=single_mcts()
+        
+        action=index(max(win_probs))
+        x=action//l
+        action=(action//len(board),action)
+        return action, win_probs
+
+    def sim_games(self,loops):
+        for _ in range(loops):
+            board=ban_syokika(self.board_x,self.board_y)
+            iro=BLACK
+            steps=0
+            boards=[]
+            while True:
+                steps+=1
+                board=to_black(board,iro)
+                if not uteru_masu(board): 
+                    board=to_original(board,iro)
+                    break
+                parent_node=Node(board)
+                win_probs=mcts(parent_node)
+                self.win_probs_this_time.append((ex_board(board),win_prob))
+                board=ishi_utsu(action[0],action[1],board,iro=BLACK)
+                boards.append(board)
+                board=to_original(board,iro)
+                iro=3-iro
+            
+            b,w=ishino_kazu(board)
+            b_win=b>w
+            for i in range(steps):
+                win= 1-i%2 if b_win else i%2
+                self.win_boards_this_time.append((b_win[i],win))
+            print(f'is the number of win_rec the same as b_win?:',len(win_rec)==len(b_win))
+            
+
+
+
+
     
     def save_memory(self,folder='memory',filename='transitions'):
         filepath=os.path.join(folder,filename)
@@ -170,7 +339,7 @@ class OthelloAgent8:
         torch.save({'state_dict':self.agent_net.state_dict()},filepath)
 
 
-    def load_checkpoint(self,folder='checkpoint',filename='checkpoint.pth.tar'):
+    def load_checkpoint(self,folder='checkpoint',filename='checkpoint_fromMC.pth.tar'):
         filepath=os.path.join(folder,filename)
         if not os.path.exists(filepath):
             print(f"no model in path{filepath}")
@@ -209,52 +378,3 @@ class OthelloAgent8:
             return random.sample(self.win_probs,samples)
 
     
-
-
-
-
-if __name__=='__main__':
-    from computer import computer_MC
-
-    board=[]
-    wx=8
-    wy=8
-
-    for _ in range(wy):
-        board.append([0]*wx)
-    for y in range(wy):
-        for x in range(wx):
-            board[y][x]=0
-    board[3][4]=BLACK
-    board[4][3]=BLACK
-    board[3][3]=WHITE
-    board[4][4]=WHITE
-
-    mc_agent=computer_MC(wx,wy)
-    agent=OthelloAgent8(board_x=wx,board_y=wy,args=args)
-    agent.load_checkpoint()
-    print(agent.select_action(board))
-
-    mc_agent.load_wins(load_len=500)
-    for _ in range(30):
-        boards,answers=[],[]
-        for board,answer in mc_agent.sample(args['batchs']):
-            # in agent_mc, "board" is a list of 8x8 and "answer" is a list of 64
-            board=torch.from_numpy(np.array(board,dtype=np.float32))
-            answer=torch.from_numpy(np.array(answer,dtype=np.float32))
-            boards.append(board)
-            answers.append(answer)
-        boards=torch.stack(boards,dim=0).view(args['batchs'],1,wx,wy)
-        answers=torch.stack(answers,dim=0)
-        #if _==0: print(board)
-        
-        agent.train_dir(boards,answers)
-
-    print("board")
-    print(board)
-    print("mc_predict")
-    print(answer)
-    print("nn_predict")
-    print(agent.predict(board.view(1,1,wx,wy)))
-
-    agent.save_checkpoint()

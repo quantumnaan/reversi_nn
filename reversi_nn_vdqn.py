@@ -1,3 +1,5 @@
+#reversi_nn_vdqn.py
+
 import os
 import sys
 import numpy as np
@@ -170,7 +172,7 @@ class OthelloAgent8:
         torch.save({'state_dict':self.agent_net.state_dict()},filepath)
 
 
-    def load_checkpoint(self,folder='checkpoint',filename='checkpoint.pth.tar'):
+    def load_checkpoint(self,folder='checkpoint',filename='checkpoint_fromMC.pth.tar'):
         filepath=os.path.join(folder,filename)
         if not os.path.exists(filepath):
             print(f"no model in path{filepath}")
@@ -215,7 +217,7 @@ class OthelloAgent8:
 
 if __name__=='__main__':
     from computer import computer_MC
-
+    print("a")
     board=[]
     wx=8
     wy=8
@@ -236,7 +238,7 @@ if __name__=='__main__':
     print(agent.select_action(board))
 
     mc_agent.load_wins(load_len=500)
-    for _ in range(30):
+    for _ in range(300):
         boards,answers=[],[]
         for board,answer in mc_agent.sample(args['batchs']):
             # in agent_mc, "board" is a list of 8x8 and "answer" is a list of 64
