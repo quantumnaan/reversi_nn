@@ -2,7 +2,7 @@ import tkinter
 import tkinter.messagebox
 import random
 from computer import computer_MC
-from reversi_nn import OthelloAgent
+from reversi_nn import OthelloAgent8
 
 FS=("Times New Roman",30)
 FL=("Times New Roman",80)

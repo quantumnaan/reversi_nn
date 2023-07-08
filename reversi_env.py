@@ -2,7 +2,8 @@ import tkinter
 import tkinter.messagebox
 import random
 from computer import computer_MC
-from reversi_nn import OthelloAgent
+from reversi_nn import OthelloAgent8
+from reversi_az import AlphaZeroAgent
 
 FS=("Times New Roman",30)
 FL=("Times New Roman",80)
@@ -36,7 +37,8 @@ board=[
 
 
 agent_mc=computer_MC(8,8)
-agent_nn=OthelloAgent(8,8)
+agent_nn=OthelloAgent8(8,8)
+agent_az=AlphaZeroAgent()
 
 def click(e):
     global mx,my,mc
@@ -255,7 +257,8 @@ def main():
                     space-=1
                     proc=3
         else: 
-            cx,cy=agent_nn.select_action(board)#computer_2(color[turn],200)
+            cx,cy=agent_az.select_action(board)
+            #cx,cy=agent_nn.select_action(board)#computer_2(color[turn],200)
             #cx,cy=agent_mc.action(color[turn],200,board)
             ishi_utsu(int(cx),int(cy),color[turn])
             space-=1

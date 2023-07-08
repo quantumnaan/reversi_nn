@@ -1,149 +1,106 @@
 #train_nn.py
-from reversi_nn import OthelloAgent8
-from copy import deepcopy
+import threading
 import numpy as np
+from copy import deepcopy
+import matplotlib.pyplot as plt
+import matplotlib.patches as patches
+from matplotlib.animation import  ArtistAnimation
+import time
 
-loop=50
+from utils import*
+from reversi_nn import OthelloAgent8
+from reversi_az import AlphaZeroAgent
 
-wx=8
-wy=8
-BLACK=1
-WHITE=2
-agent_b=OthelloAgent8()
-agent_w=OthelloAgent8()
-board=[[0]*wx for _ in range(wy)]
-board[3][4]=BLACK
-board[4][3]=BLACK
-board[3][3]=WHITE
-board[4][4]=WHITE
-back=deepcopy(board)
+def train():
+    agent_az=AlphaZeroAgent()
+    agent_az.load_checkpoint()
+    
+    for i in range(3):
+        agent_az.sim_games(5)
+        agent_az.save_wins(agent_az.win_probs_this_time)
+        batchs=32
+        for j in range(30):
+            agent_az.load_wins(filename='win_probs_nn.pkl',load_len=batchs)
+            samples=agent_az.sample_from_whole(batchs)
+            boards=[]
+            answers=[]
+            for board,answer in samples:
+                board=torch.from_numpy(np.array(ex_board(board),dtype=np.float32))
+                answer=torch.from_numpy(np.array(answer,dtype=np.float32))
+                boards.append(board)
+                answers.append(answer)
+            boards=torch.stack(boards,dim=0).view(batchs,1,10,10)
+            answers=torch.stack(answers,dim=0)
+            agent_az.train_dir(boards,answers)
+        print(f'{i}-th loop in train_nn')
 
-agent_b.load_checkpoint()
-agent_w.load_checkpoint()
 
-def kaeseru(board,x,y,iro):
-    if board[y][x]!=0:
-        return -1
-    total=0
-    for dy in range(-1,2):
-        for dx in range(-1,2):
-            k=0
-            sx=x
-            sy=y
-            while True:
-                sx+=dx
-                sy+=dy
-                if sx<0 or sx>7 or sy<0 or sy>7:
-                    break
-                if board[sy][sx]==0:
-                    break
-                if board[sy][sx]==3-iro:
-                    k+=1
-                if board[sy][sx]==iro:
-                    total+=k
-                    break
-    return total
 
-def uteru_masu(board,iro):
-    for y in range(wx):
-        for x in range(wy):
-            if kaeseru(board,x,y,iro)>0:
-                return True
-
-    return False
-
-def ishino_kazu(board):
-    b=0
-    w=0
-    for y in range(8):
-        for x in range(8):
-            if board[y][x]==BLACK: b+=1
-            if board[y][x]==WHITE: w+=1
-
-    return b,w
-
-def save():
-    for y in range(8):
-        for x in range(8):
-            back[y][x] = board[y][x]
-
-def load():
-    for y in range(8):
-        for x in range(8):
-            board[y][x] = back[y][x]
-
-def ishi_utsu(board,x,y,iro):
-    board[y][x]=iro
-    for dy in range(-1,2):
-        for dx in range(-1,2):
-            k=0
-            sx=x
-            sy=y
-            while True:
-                sx+=dx
-                sy+=dy
-                if sx<0 or sx>7 or sy<0 or sy>7:
-                    break
-                if board[sy][sx]==0:
-                    break
-                if board[sy][sx]==3-iro:
-                    k+=1
-                if board[sy][sx]==iro:
-                    for i in range(k):
-                        sx-=dx
-                        sy-=dy
-                        board[sy][sx]=iro
-                    break
-    return board
-
-def to_black(board,iro):
-    if iro==BLACK:
-        return board
-    new_board=[[0]*wx for _ in range(wy)]
-    for x in range(wx):
-        for y in range(wy):
-            if board[y][x]==3-iro: new_board[y][7-x]=iro
-            elif board[y][x]==iro: new_board[y][7-x]=3-iro
-    return new_board
-
-def from_black(x,y,iro):
-    if iro==BLACK:
-        return x,y
-    else:
-        return 7-x,y
-
-def uchiau_nn(ini_board,iro):
-    board=deepcopy(ini_board)
+def computer_0(board,iro):
     while True:
-        if uteru_masu(board,BLACK)==False and uteru_masu(board,WHITE)==False:
-            break
-        if uteru_masu(board,iro)==True:
-            black_board=to_black(board,iro)
-            x,y=agent_b.select_action(black_board,epsilon=0.1)
-            x,y=map(int,from_black(x,y,iro))
-            board=ishi_utsu(deepcopy(board),x,y,iro)
-        iro=3-iro
-    return board
-
-def get_winprobs(board,iro,loops):
-    win=[0]*64
-    save()
-    for y in range(wy):
-        for x in range(wx):
-            if kaeseru(board,x,y,iro)>0:
-                for i in range(loops):
-                    ishi_utsu(deepcopy(board),x,y,iro)
-                    tmp_board=uchiau_nn(board,iro)
-                    b,w=ishino_kazu(tmp_board)
-                    if iro==BLACK and b>w:
-                        win[x+y*8] += 1
-                    if iro==WHITE and w>b:
-                        win[x+y*8] += 1
-                    load()
-                    print(f'{i}th loop in ({x},{y})')
-    return [i/loops for i in win]
+        rx=random.randint(0,7)
+        ry=random.randint(0,7)
+        if kaeseru(rx,ry,board,iro=iro):
+            return rx,ry
 
 
-#ini_board=[[0]*wx for _ in range(wy)]
-win_prob=get_winprobs(deepcopy(board),BLACK,10)
-print(np.resize(np.array(win_prob),(8,8)))
+def make_frame(board,win_probs,iro):
+    frame_object=[]
+    for i in range(8):
+        for j in range(8):
+            x=[i,i,i+1,i+1]
+            y=[7-j,8-j,8-j,7-j]
+            #print(plt.fill(x, y, color="green", alpha=np.clip(win_probs[j*8+i],0,1)))
+            if iro==BLACK: frame_object.extend(plt.fill(x, y, color="green", alpha=np.clip(win_probs[j*8+i],0,1)))
+            if board[j][i]==BLACK:
+                frame_object.append(patches.Circle(xy=(i+0.5, 7.5-j), radius=0.2, fc='b', ec='b'))
+            elif board[j][i]==WHITE:
+                frame_object.append(patches.Circle(xy=(i+0.5, 7.5-j), radius=0.2, fc='w', ec='b'))
+    return frame_object #pip install matplotlib==3.5.1
+
+def vs_rand_demo():
+    agent_az_demo=AlphaZeroAgent()
+    agent_az_demo.load_checkpoint()
+    plt.title('AlphaZero vs Random')
+    plt.xlim(0, 8)
+    plt.ylim(0, 8)
+
+    for i in range(1):
+        print(i)
+        frames=[]
+        board=ban_syokika(8,8)
+        iro=BLACK
+        steps=0
+        while True:
+            plt.cla()
+            if not uteru_masu(board,BLACK) and not uteru_masu(board,WHITE):
+                break
+            if iro==BLACK:
+                board_nn=board_list2tensor(ex_board(to_black(deepcopy(board),iro)))
+                x,y=agent_az_demo.select_action(board)
+                win_probs=agent_az_demo.predict(board_nn)[0].tolist()
+            else:
+                x,y=computer_0(board,iro)
+            board=ishi_utsu(x,y,board,iro)
+            #frames.append(make_frame(board,win_probs,iro))
+            for i in range(8):
+                for j in range(8):
+                    x=[i,i,i+1,i+1]
+                    y=[7-j,8-j,8-j,7-j]
+                    #print(plt.fill(x, y, color="green", alpha=np.clip(win_probs[j*8+i],0,1)))
+                    if iro==BLACK: plt.fill(x, y, color="green", alpha=np.clip(win_probs[j*8+i],0,1))
+                    if board[j][i]==BLACK:
+                        c=patches.Circle(xy=(i+0.5, 7.5-j), radius=0.2, fc='b', ec='b')
+                        ax.add_patch(c)
+                    elif board[j][i]==WHITE:
+                        c=patches.Circle(xy=(i+0.5, 7.5-j), radius=0.2, fc='w', ec='b')
+                        ax.add_patch(c)
+            steps+=1
+            iro=3-iro
+            time.sleep(0.5)
+            plt.pause(0.1)
+            
+
+fig= plt.figure(figsize=(3,3))
+ax=plt.axes()
+vs_rand_demo()
