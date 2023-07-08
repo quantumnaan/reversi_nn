@@ -14,10 +14,12 @@ import torch.optim as optim
 # parameters and the strucrure have to be adjusted thorough ttial and error,
 # hints: skip connection, convolution connected layer
 # batch normalization
+# what is requires_grad
 # assume here the color of the player is black without loss of generality
 
 BLACK=1 #player
 WHITE=2 #opponent
+c_ucb=1.0
 
 device='cuda' if torch.cuda.is_available() else 'cpu'
 args={
@@ -67,9 +69,7 @@ def mask_kaeseru(board,prediction):
     return prediction
 
 def ban_syokika(wx,wy):
-    for y in range(wx):
-        for x in range(wy):
-            board[y][x]=0
+    board=[[0]*wx for _ in range(wy)]
     board[3][4]=BLACK
     board[4][3]=BLACK
     board[3][3]=WHITE
@@ -77,7 +77,7 @@ def ban_syokika(wx,wy):
     return board
 
 def board_list2tensor(board:list):
-    ret=np.array(copy.deepcopy(board))
+    ret=np.array(deepcopy(board))
     ret=torch.tensor(ret.astype(np.float32))
     # contiguous??
     ret=ret.view(1,1,ret.size()[0],ret.size()[0])
@@ -95,10 +95,10 @@ def ishi_utsu(x,y,board,iro):
             k=0
             sx=x
             sy=y
-            while True:
+            while True:#ERROR here: infinetely loops with k=0,(dx,dy)=(0,0)
                 sx+=dx
                 sy+=dy
-                if sx<0 or sx>7 or sy<0 or sy>7:
+                if sx<0 or sx>len(board[0]) or sy<0 or sy>len(board):
                     break
                 if board[sy][sx]==0:
                     break
@@ -109,6 +109,7 @@ def ishi_utsu(x,y,board,iro):
                         sx-=dx
                         sy-=dy
                         board[sy][sx]=iro
+                    break
     return board
 
 def uteru_masu(board):#iro=BLACK
@@ -147,8 +148,8 @@ def ex_board(board):
     sy=len(ret)
     sx=len(ret[0])
     ret=[[-10]*sx]+ret+[[-10]*sx]
-    for row in ret:
-        row=[-10]+row+[-10]
+    for i in range(len(ret)):
+        ret[i]=[-10]+ret[i]+[-10]
     return ret
 
 
@@ -166,7 +167,7 @@ class ReplayMemory(object):
     def __len__(self):
         return len(self.memory)
 
-class NN(nn.Module):
+class NN(nn.Module):# input:(batches,1,board_x+2,board_y+2)->output:(board_x*board_y)
     def __init__(self,board_x,board_y,args):
         super(NN,self).__init__()
         self.conv_layers=nn.Sequential(
@@ -180,7 +181,7 @@ class NN(nn.Module):
             nn.ReLU()
         )
         self.linear_layers=nn.Sequential(
-            nn.Linear(2048,args['linears']),
+            nn.Linear(4608,args['linears']),
             nn.ReLU(),
             nn.Linear(args['linears'],args['linears']),
             nn.ReLU(),
@@ -193,42 +194,47 @@ class NN(nn.Module):
         #print(x.size())
 
         x=self.linear_layers(x)
-        #print(x.size())
         #TODO nn model is yet to be implemented with resnet,attention
-        return win_prob
+        return x
     
     def check_cnn_size(self,size_check):
         out=self.conv_layers(size_check)
         return out.size()
 
 class Node:
-    def __init__(self,board,max_d=5):
+    def __init__(self,board,iro,max_d=5,prev_action=None):
         self.board=board
         self.children=[]
         self.win_probs=[]
         self.visit_time=0
         self.is_expanded=False
         self.max_d=max_d
+        self.prev_action=prev_action
+        self.iro=iro
+        self.fin=False
     
     def expand(self):
         if not self.is_expanded and self.max_d>0:
-            for y in range(len(self.board)):
-                for x in range(len(self.board[0])):
-                    if kaeseru(x,y,self.board)>0:
-                        tmp_board=deepcopy(self.board)
-                        tmp_board=ishi_utsu(x,y,board,iro=BLACK)
-                        child_node=Node(tmp_board,max_d=self.max_d-1)
-                        self.children.append(child_node)
-        self.is_expanded=True
+            if uteru_masu:
+                for y in range(len(self.board)):
+                    for x in range(len(self.board[0])):
+                        if kaeseru(x,y,self.board)>0:
+                            tmp_board=deepcopy(self.board)
+                            #tmp_board=to_black(board,iro)
+                            tmp_board=ishi_utsu(x,y,tmp_board,iro=3-self.iro)
+                            child_node=Node(tmp_board,3-self.iro,max_d=self.max_d-1,prev_action=y*len(tmp_board)+x)
+                            self.children.append(child_node)
+                self.is_expanded=True
+            else:
+                self.fin=True
     
-    #TODO is there any method necessary regarding node?
-    def 
+    #TODO is there any method necessary regarding node? 
 
     
 
 class AlphaZeroAgent:
     def __init__(self,board_x=8,board_y=8,args=args):#assume that iro=black
-        self.agent_net=NN(board_x+2,board_y+2,args).to(device)
+        self.agent_net=NN(board_x,board_y,args).to(device)
         self.optimizer=optim.AdamW(self.agent_net.parameters(),lr=args['lr_mc'],amsgrad=True)
         self.optimizer=optim.AdamW(self.agent_net.parameters(),lr=args['lr_sim'],amsgrad=True)
         self.loss=nn.SmoothL1Loss()
@@ -249,8 +255,7 @@ class AlphaZeroAgent:
     def select_action(self,board:list,epsilon=0):
         rand_val=random.random()
         if rand_val>=epsilon:
-            board=np.array(copy.deepcopy(board))
-            board=torch.tensor(board.astype(np.float32))
+            board=board_list2tensor(board)
             # contiguous??
             board=board.view(1,1,self.board_x,self.board_y)
             #self.agent_net eval??
@@ -278,20 +283,49 @@ class AlphaZeroAgent:
         self.optimizer.step()
 
     def single_mcts(self,node:Node):
-        
+        node.visit_time+=1
+        win_prob=0
+        win_index=-1#must be updated
+        nn_board=board_list2tensor(ex_board(to_black(node.board,node.iro)))
+        ref_win_probs=mask_kaeseru(node.board,torch.flatten(self.predict(nn_board)))
+        #print(ref_win_probs)
+        if node.visit_time>5 and not node.is_expanded: node.expand()
+        if node.is_expanded:
+            ucbs=[]
+            for child in node.children:
+                ucb=float(ref_win_probs[child.prev_action]) \
+                        + c_ucb*np.sqrt(node.visit_time)/(1+child.visit_time)
+                ucbs.append(ucb)
+            if len(ucbs)==0:print(node.board)#TODO sometimes len(ubcs) becomdes zero
+            win_prob,win_index=self.single_mcts(node.children[ucbs.index(max(ucbs))])
+        elif node.fin:
+            b,w=ishino_kazu(node.board)
+            win_prob=0.9 if b>w else 1.-0.9 #TODO because 1 is too high..?
+            win_index=node.prev_action
+        else:
+            win_prob,win_index=torch.max(ref_win_probs,dim=0)
+            win_prob,win_index=float(win_prob),int(win_index)
+
+        return 1.-win_prob,win_index
 
     
-    def mcts(self,parent_node:Node,loops=50):
+    def mcts(self,parent_node:Node,loops=100):
         parent_node.expand()
-        win_probs=[]
-        ref_win_probs=self.predict(parent_node.board)
+        win_probs=[0]*(len(parent_node.board)*len(parent_node.board[0]))
         for i in range(loops):
-            win_prob=single_mcts()
+            win_prob,win_index=self.single_mcts(parent_node)
+            try:
+                if win_probs[win_index]<win_prob: win_probs[win_index]=win_prob
+            except:
+                print(win_probs,win_index,i)
+                raise
         
-        action=index(max(win_probs))
-        x=action//l
-        action=(action//len(board),action)
-        return action, win_probs
+        action=win_probs.index(max(win_probs))
+        #print(win_probs)
+        x=action%self.board_x
+        y=action//self.board_y
+        if not kaeseru(x,y,parent_node.board): raise
+        return (x,y), win_probs
 
     def sim_games(self,loops):
         for _ in range(loops):
@@ -305,19 +339,20 @@ class AlphaZeroAgent:
                 if not uteru_masu(board): 
                     board=to_original(board,iro)
                     break
-                parent_node=Node(board)
-                win_probs=mcts(parent_node)
-                self.win_probs_this_time.append((ex_board(board),win_prob))
+                parent_node=Node(board,iro)
+                action,win_probs=self.mcts(parent_node)
+                self.win_probs_this_time.append((ex_board(board),win_probs))
                 board=ishi_utsu(action[0],action[1],board,iro=BLACK)
                 boards.append(board)
                 board=to_original(board,iro)
                 iro=3-iro
+                if steps%10==0: print(board)
             
             b,w=ishino_kazu(board)
             b_win=b>w
             for i in range(steps):
                 win= 1-i%2 if b_win else i%2
-                self.win_boards_this_time.append((b_win[i],win))
+                self.win_boards_this_time.append((board,win))
             print(f'is the number of win_rec the same as b_win?:',len(win_rec)==len(b_win))
             
 
@@ -378,3 +413,6 @@ class AlphaZeroAgent:
             return random.sample(self.win_probs,samples)
 
     
+if __name__=='__main__':
+    agent_az=AlphaZeroAgent()
+    agent_az.sim_games(100)
