@@ -11,8 +11,8 @@ WHITE=2
 #agent_az=AlphaZeroAgent()
 #agent_az.load_checkpoint()
 agent_mc=computer_MC(6,6)
-agent_mc.load_wins(filename="win_probs.pkl",load_len=10)
-results=agent_mc.sample(2)
+agent_mc.load_wins(filename="win_probs_nn66.pkl",load_len=10)
+results=agent_mc.sample(1)
 # agent_az.sim_games(1)
 # results=agent_az.sample_this_time(5)
 
@@ -22,23 +22,20 @@ results=agent_mc.sample(2)
 # with open('win_probs.pkl','rb') as f:
 #     results=pickle.load(f)
 
-boards=[i[0] for i in results[:2]]
+boards=[i[0] for i in results[:1]]
 #win_probs=[]#[i[1] for i in results]
-win_probs_mc=[results[0][1]]
-win_probs=[results[1][1]]
-# for i in range(len(results[:3])):
-#     win_probs_mc.append(agent_mc.predict(BLACK,50,boards[i]))
-#     board=board_list2tensor(ex_board(boards[i]))
-#     tmp_win_prob=agent_az.predict(board)[0].tolist()
-#     #print(len(tmp_win_prob))
-#     win_probs.append(tmp_win_prob)
-    
-    # print("board:")
-    # print(boards[i])
-    # print("pred_nn:")
-    # print(win_probs[i])
-    # print("pred_mc:")
-    # print(win_probs_mc)
+win_probs_mc=[]
+win_probs=[results[0][1]]
+for i in range(len(results[:1])):
+    win_probs_mc.append(agent_mc.predict(BLACK,50,boards[i]))
+    board=board_list2tensor(ex_board(boards[i]))
+    #tmp_win_prob=agent_az.predict(board)[0].tolist()
+    #print(len(tmp_win_prob))
+    #win_probs.append(tmp_win_prob)
+
+
+print('nn:\n',win_probs[0])
+print('mc:\n',win_probs_mc[0])
 
 fig = plt.figure(figsize=(6, 3))
 ax1 = fig.add_subplot(121)
@@ -58,10 +55,10 @@ def make_ax(ax,win_probs,board):
         for j in range(6):
             x=[i,i,i+1,i+1]
             y=[5-j,6-j,6-j,5-j]
-            if win_probs[j*6+i]>0:
+            if win_probs[j*6+i]>0: 
                 ax.fill(x, y, color="green", alpha=np.clip(win_probs[j*6+i],0,1))
-            else:
-                ax.fill(x, y, color="red", alpha=np.clip(win_probs[j*6+i],0,1))
+            else: 
+                ax.fill(x, y, color="red", alpha=np.clip(-win_probs[j*6+i],0,1))
 
             if board[j][i]==BLACK:
                 c1 = patches.Circle(xy=(i+0.5, 5.5-j), radius=0.2, fc='b', ec='b')
@@ -72,5 +69,5 @@ def make_ax(ax,win_probs,board):
     #return ax
 
 make_ax(ax1,win_probs_mc[0],boards[0])
-make_ax(ax2,win_probs[0],boards[1])
+make_ax(ax2,win_probs[0],boards[0])
 plt.show()

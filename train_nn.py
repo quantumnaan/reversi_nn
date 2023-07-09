@@ -13,14 +13,15 @@ from reversi_az import AlphaZeroAgent
 
 def train():
     agent_az=AlphaZeroAgent(board_x=6,board_y=6)
-    agent_az.load_checkpoint(filename='checkpoint_az.pth.tar')
+    agent_az.load_checkpoint(filename='checkpoint_az66.pth.tar')
     
-    for i in range(1):
-        #agent_az.sim_games(10)
-        #agent_az.save_wins(agent_az.win_probs_this_time)
-        batchs=1024
-        agent_az.load_wins(filename='win_probs.pkl',load_len=batchs*10)
-        for j in range(30):
+    for i in range(5):
+        agent_az.sim_games(5)
+        agent_az.save_wins(agent_az.win_probs_this_time,filename='win_probs_nn66.pkl')
+        agent_az.win_probs_this_time=[]
+        batchs=256
+        batchs=agent_az.load_wins(filename='win_probs_nn66.pkl',load_len=batchs*10) //10
+        for j in range(100):
             samples=agent_az.sample_from_whole(batchs)
             boards=[]
             answers=[]
@@ -29,11 +30,11 @@ def train():
                 answer=torch.from_numpy(np.array(answer,dtype=np.float32))
                 boards.append(board)
                 answers.append(answer)
-            boards=torch.stack(boards,dim=0).view(batchs,1,10,10)
+            boards=torch.stack(boards,dim=0).view(batchs,1,8,8)
             answers=torch.stack(answers,dim=0)
             agent_az.train_dir(boards,answers)
-        print(f'{loop}-th loop in train_nn')
-    agent_az.save_checkpoint(filename='checkpoint_az_88.pth.tar')
+        print(f'{i}-th loop in train_nn')
+    agent_az.save_checkpoint(filename='checkpoint_az66.pth.tar')
 
 
 
@@ -62,7 +63,7 @@ def computer_0(board,iro):
 
 def vs_rand_demo():
     agent_az_demo=AlphaZeroAgent(board_x=6,board_y=6)
-    agent_az_demo.load_checkpoint(filename='checkpoint_az.pth.tar')
+    agent_az_demo.load_checkpoint(filename='checkpoint_az66.pth.tar')
     fig=plt.figure(figsize=(3,3))
     ax=fig.add_subplot(111)
     plt.xlim(0, 6)
@@ -78,12 +79,12 @@ def vs_rand_demo():
                 break
             if iro==BLACK:
                 if uteru_masu(board,iro=iro):
-                    board_nn=board_list2tensor(ex_board(to_black(deepcopy(board),iro)))
                     (x,y),win_probs=agent_az_demo.select_action_mcts(board)
                     board=ishi_utsu(x,y,board,iro)
             else:
                 if uteru_masu(board,iro=iro):
                     x,y=computer_0(board,iro)
+                    #(x,y), _=agent_az_demo.select_action_mcts(board)
                     board=ishi_utsu(x,y,board,iro)
             #frames.append(make_frame(board,win_probs,iro))
             
@@ -110,8 +111,8 @@ def vs_rand_demo():
             #time.sleep(0.5)
             plt.pause(0.5)
         plt.show()
-        print(board)
+        #print(board)
             
 
-#train()
+train()
 vs_rand_demo()

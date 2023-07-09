@@ -6,7 +6,8 @@ import random
 
 BLACK=1 #player
 WHITE=2 #opponent
-c_ucb=1.0
+c_ucb=0.9
+MAX_SAVE_WIN_PROB=10000
 
 def board_cache(func):
     c_boards = {}
@@ -16,10 +17,10 @@ def board_cache(func):
         flag=False
         if len(c_boards)!=0:
             for board in c_boards.keys():
-                if np.array(args[0])==np.array(board):
+                if tuple(sum(args[1],[]))==board:
                     return c_boards[board]
-        c_boards[args[0]] = func(*args)
-        return c_boards[args[0]]
+        c_boards[tuple(sum(args[1],[]))] = func(*args)
+        return c_boards[tuple(sum(args[1],[]))]
     return _wrapper
 
 def kaeseru(x,y,board,iro=BLACK):

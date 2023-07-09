@@ -67,12 +67,15 @@ class ResNet(nn.Module):# input:(batches,1,board_x+2,board_y+2)->output:(board_x
         super(ResNet,self).__init__()
         self.block1=ResBlock(1,64)
         self.linear1=nn.Linear((board_x+2)*(board_y+2),(board_x+2)*(board_y+2))
-        self.linear2=nn.Linear(1024,128)
-        self.linear3=nn.Linear(128,board_x*board_y)
+        self.linear2=nn.Linear(1024,256)
+        self.linear3=nn.Linear(256,(board_x+2)*(board_y+2))
+        self.linear4=nn.Linear((board_x+2)*(board_y+2),board_x*board_y)
         self.tanh1=nn.Tanh()
         self.tanh2=nn.Tanh()
+        self.tanh3=nn.Tanh()
 
     def forward(self,x):
+        init_x=x.view(x.size()[0],-1)
         init_size=x.size()
         x=x.view(x.size()[0],-1)
         x=self.linear1(x)
@@ -82,7 +85,10 @@ class ResNet(nn.Module):# input:(batches,1,board_x+2,board_y+2)->output:(board_x
         x=self.linear2(x)
         x=self.tanh1(x)
         x=self.linear3(x)
+        x+=init_x
         x=self.tanh2(x)
+        x=self.linear4(x)
+        x=self.tanh3(x)
         return x
 
 class Node:
@@ -162,7 +168,7 @@ class AlphaZeroAgent:
         win_probs=[0]*(len(board)*len(board[0]))
         if rand_val>=epsilon:
             current_node=Node(board,iro=BLACK)
-            (x,y),win_probs=self.mcts(current_node,loops=30)
+            (x,y),win_probs=self.mcts(current_node)
         else:
             x,y=random.choice(valid_masu(board,iro=BLACK))
         return (x,y),win_probs
@@ -179,7 +185,7 @@ class AlphaZeroAgent:
     @board_cache
     def simple_mcts(self,board,loops=10):
         iro=BLACK
-        board_init=deepcopy(board)
+        board_init=board
         board_here=deepcopy(board)
         win=[0]*(len(board)*len(board[0]))
         kaeshita=[False]*(len(board)*len(board[0]))
@@ -193,10 +199,9 @@ class AlphaZeroAgent:
                         kaeshita[x+y*len(board[0])]=True
                         if b>w:
                             win[x+y*len(board[0])]+=1
-                        board_here=board_init[:]
+                        board_here=deepcopy(board_init)
         win=[2.*w/loops-1. if k else 0 for (w,k) in zip(win,kaeshita) ]
-        max_win=max([w for (w,k) in zip(win,kaeshita) if k])
-        return max_win,win.index(max_win)
+        return win
 
     def single_mcts(self,node:Node):
         #return action selected by pucb and corresponding win probs in this board 
@@ -204,59 +209,66 @@ class AlphaZeroAgent:
         win_prob=0 
         win_index=None#must be updated
 
-        if sum(node.board,[]).count(0)<=4:
-            win_prob,win_index=self.simple_mcts(node.board)
+        # if sum(node.board,[]).count(0)<=4:
+        #     win_prob,win_index=self.simple_mcts(node.board)
+        # else:
+        nn_board=board_list2tensor(ex_board(to_black(node.board,node.iro)))
+        ref_win_probs=torch.flatten(self.predict(nn_board)).tolist()
+        node.win_probs=ref_win_probs
+        if node.visit_time>=5 and not node.is_expanded: node.expand()
+
+        if node.is_expanded:
+            ucbs=[]
+            for child in node.children:
+                action_prob=((ref_win_probs[child.prev_action]+1.)/2)\
+                                /sum([(i+1.)/2. for i in ref_win_probs])
+                ucb=(ref_win_probs[child.prev_action]+1.)/2 \
+                        + c_ucb*action_prob*np.sqrt(np.log(node.visit_time))/(1+child.visit_time)
+                ucbs.append(ucb)
+            if len(ucbs)==0:print(node.board)#TODO sometimes len(ubcs) becomdes zero not when the game ends 
+            win_prob , _ =self.single_mcts(node.children[ucbs.index(max(ucbs))])
+
+            # because win_prob to the opponent is lose_prob to the player
+            win_prob=-win_prob 
+            win_index=node.children[ucbs.index(max(ucbs))].prev_action
+
+            #update node win_probs to get close to the child win_probs, too heuristic! ('_;)
+            lr_win_probs=0.1
+            node.win_probs[win_index]+=lr_win_probs*(win_prob-node.win_probs[win_index])
+
+        #this does not work because in case sum(node.board,[]).count(0)<=4 simple mcts is executed
+        elif node.fin:
+            #print('myproblem: node.fin becomes True in single mcts accidentally')
+            b,w=ishino_kazu(node.board)
+            win_prob=1. if b>w else -1.
+            win_index=None
+
+        # in a leaf node
         else:
-            nn_board=board_list2tensor(ex_board(to_black(node.board,node.iro)))
-            ref_win_probs=torch.flatten(self.predict(nn_board)).tolist()
-            node.win_probs=ref_win_probs
-            if node.visit_time>5 and not node.is_expanded: node.expand()
-
-            if node.is_expanded:
-                ucbs=[]
-                for child in node.children:
-                    ucb=(float(ref_win_probs[child.prev_action])+1.)/2 \
-                            + c_ucb*np.sqrt(np.log(node.visit_time))/(1+child.visit_time)
-                    ucbs.append(ucb)
-                if len(ucbs)==0:print(node.board)#TODO sometimes len(ubcs) becomdes zero not when the game ends 
-                win_prob , _ =self.single_mcts(node.children[ucbs.index(max(ucbs))])
-
-                # because win_prob to the opponent is lose_prob to the player
-                win_prob=-win_prob 
-                win_index=node.children[ucbs.index(max(ucbs))].prev_action
-
-                #update node win_probs to get close to the child win_probs, too heuristic! ('_;)
-                lr_win_probs=0.1
-                node.win_probs[win_index]+=lr_win_probs*(win_prob-node.win_probs[win_index])
-
-            #this does not work because in case sum(node.board,[]).count(0)<=4 simple mcts is executed
-            elif node.fin:
-                print('myproblem: node.fin becomes True in single mcts accidentally')
-                b,w=ishino_kazu(node.board)
-                win_prob=1. if b>w else -1.
-                win_index=None
-
-            # in a leaf node
-            else:
-                win_prob=-node.parent.win_probs[node.prev_action]
-                win_index= None
-                #pay attension, leaf node is refferd only from parent node, which does not use win_index
+            win_prob=-node.parent.win_probs[node.prev_action]
+            win_index= None
+            #pay attension, leaf node is refferd only from parent node, which does not use win_index
         
         return win_prob,win_index
 
     
-    def mcts(self,parent_node:Node,loops=30):
+    def mcts(self,parent_node:Node,loops=50):
         parent_node.expand()
         probs_size=len(parent_node.board)*len(parent_node.board[0])
         win_probs=[0]*(probs_size)
         probs_num=[0]*(probs_size)
-        for i in range(loops):
-            # win_probs are stored and meaned in each node->no
-            win_prob,win_index=self.single_mcts(parent_node)
-            probs_num[win_index]+=1
-            win_probs[win_index]+=1./(probs_num[win_index])*(win_prob-win_probs[win_index])
 
-        masked_prob=mask_kaeseru(parent_node.board,parent_node.win_probs)
+        for i in range(loops):
+            if sum(parent_node.board,[]).count(0)<=4:
+                win_probs=self.simple_mcts(parent_node.board)
+
+            # win_probs are stored and meaned in each node->no longer
+            else:
+                win_prob,win_index=self.single_mcts(parent_node)
+                probs_num[win_index]+=1
+                win_probs[win_index]+=1./(probs_num[win_index])*(win_prob-win_probs[win_index])
+
+        masked_prob=mask_kaeseru(parent_node.board,win_probs)
         action=masked_prob.index(max(masked_prob) )
         #print(win_probs)
         x=action%self.board_x
@@ -324,8 +336,10 @@ class AlphaZeroAgent:
         except:
             print(f'no such file:{filepath}')
         with open(filepath,'wb') as f:
-            pickle.dump(win_probs_up2now+win_probs,f)
-            print('saved games with len :',len(win_probs))
+            dump_data=(win_probs_up2now+win_probs)[-MAX_SAVE_WIN_PROB:] \
+                if len(win_probs_up2now+win_probs)>MAX_SAVE_WIN_PROB else win_probs_up2now+win_probs
+            pickle.dump(dump_data,f)
+            print(f'saved games with len :{len(dump_data)},including new data with len: {len(win_probs)}')
         #print(win_probs)
 
     def load_wins(self,folder='record',filename='win_probs.pkl',load_len=300):
@@ -335,6 +349,7 @@ class AlphaZeroAgent:
             self.win_probs=tmp_win_probs[:load_len] if len(tmp_win_probs)>load_len else tmp_win_probs
             print('loaded games with len:',len(self.win_probs))
             #print(tmp_win_probs)
+        return len(self.win_probs)
 
     def sample_from_whole(self,samples):
         if len(self.win_probs)<=0:

@@ -153,13 +153,13 @@ class computer_MC:
             copy_b=copy.deepcopy(board)
             copy_b=self.to_black(copy_b,iro)
             self.win_probs_thistime.append((copy_b,wins))
-        wins=self.mask_kaeseru(board,self.predict(iro,loops,copy.deepcopy(board)),iro)
+        wins=self.mask_kaeseru(board,wins,iro)
         max_id=wins.index(max(wins))
         x=max_id%self.wx
         y=max_id//self.wy
         return x,y
 
-    def save_wins(self,win_probs:list,folder='record',filename='win_probs.pkl'):
+    def save_wins(self,win_probs:list,folder='record',filename='win_probs_nn.pkl'):
         filepath=os.path.join(folder,filename)
         win_probs_up2now=[]
         try:
