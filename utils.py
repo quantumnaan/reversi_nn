@@ -6,7 +6,7 @@ import random
 
 BLACK=1 #player
 WHITE=2 #opponent
-c_ucb=0.9
+c_ucb=1.2
 MAX_SAVE_WIN_PROB=10000
 
 def board_cache(func):

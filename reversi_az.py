@@ -223,7 +223,7 @@ class AlphaZeroAgent:
                 action_prob=((ref_win_probs[child.prev_action]+1.)/2)\
                                 /sum([(i+1.)/2. for i in ref_win_probs])
                 ucb=(ref_win_probs[child.prev_action]+1.)/2 \
-                        + c_ucb*action_prob*np.sqrt(np.log(node.visit_time))/(1+child.visit_time)
+                        + c_ucb*(action_prob+0.02)*np.sqrt(np.log(node.visit_time))/(1+child.visit_time)
                 ucbs.append(ucb)
             if len(ucbs)==0:print(node.board)#TODO sometimes len(ubcs) becomdes zero not when the game ends 
             win_prob , _ =self.single_mcts(node.children[ucbs.index(max(ucbs))])

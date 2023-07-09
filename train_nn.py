@@ -15,13 +15,13 @@ def train():
     agent_az=AlphaZeroAgent(board_x=6,board_y=6)
     agent_az.load_checkpoint(filename='checkpoint_az66.pth.tar')
     
-    for i in range(5):
-        agent_az.sim_games(5)
-        agent_az.save_wins(agent_az.win_probs_this_time,filename='win_probs_nn66.pkl')
-        agent_az.win_probs_this_time=[]
-        batchs=256
-        batchs=agent_az.load_wins(filename='win_probs_nn66.pkl',load_len=batchs*10) //10
-        for j in range(100):
+    for i in range(3):
+        # agent_az.sim_games(10)
+        # agent_az.save_wins(agent_az.win_probs_this_time,filename='win_probs_nn66.pkl')
+        # agent_az.win_probs_this_time=[]
+        batchs=512
+        batchs=agent_az.load_wins(filename='win_probs_mc.pkl',load_len=batchs*10) //10
+        for j in range(1000):
             samples=agent_az.sample_from_whole(batchs)
             boards=[]
             answers=[]
@@ -35,6 +35,9 @@ def train():
             agent_az.train_dir(boards,answers)
         print(f'{i}-th loop in train_nn')
     agent_az.save_checkpoint(filename='checkpoint_az66.pth.tar')
+    print(board)
+    print(answer)
+    print(agent_az.predict(board.view(1,1,8,8)))
 
 
 
@@ -115,4 +118,4 @@ def vs_rand_demo():
             
 
 train()
-vs_rand_demo()
+#vs_rand_demo()
