@@ -27,7 +27,7 @@ class computer_MC:
                 while True:
                     sx+=dx
                     sy+=dy
-                    if sx<0 or sx>7 or sy<0 or sy>7:
+                    if sx<0 or sx>self.wx-1 or sy<0 or sy>self.wy-1:
                         break
                     if self.board[sy][sx]==0:
                         break
@@ -39,8 +39,8 @@ class computer_MC:
         return total
 
     def uteru_masu(self,iro):
-        for y in range(8):
-            for x in range(8):
+        for y in range(self.wy):
+            for x in range(self.wx):
                 if self.kaeseru(x,y,iro)>0:
                     return True
 
@@ -49,21 +49,21 @@ class computer_MC:
     def ishino_kazu(self):
         b=0
         w=0
-        for y in range(8):
-            for x in range(8):
+        for y in range(self.wy):
+            for x in range(self.wx):
                 if self.board[y][x]==BLACK: b+=1
                 if self.board[y][x]==WHITE: w+=1
 
         return b,w
 
     def save(self):
-        for y in range(8):
-            for x in range(8):
+        for y in range(self.wy):
+            for x in range(self.wx):
                 self.back[y][x] = self.board[y][x]
 
     def load(self):
-        for y in range(8):
-            for x in range(8):
+        for y in range(self.wy):
+            for x in range(self.wx):
                 self.board[y][x] = self.back[y][x]
     
     def ishi_utsu(self,x,y,iro):
@@ -76,7 +76,7 @@ class computer_MC:
                 while True:
                     sx+=dx
                     sy+=dy
-                    if sx<0 or sx>7 or sy<0 or sy>7:
+                    if sx<0 or sx>self.wx-1 or sy<0 or sy>self.wy-1:
                         break
                     if self.board[sy][sx]==0:
                         break
@@ -96,30 +96,44 @@ class computer_MC:
             iro = 3-iro
             if self.uteru_masu(iro)==True:
                 while True:
-                    x = random.randint(0, 7)
-                    y = random.randint(0, 7)
+                    x = random.randint(0, self.wx-1)
+                    y = random.randint(0, self.wy-1)
                     if self.kaeseru(x, y, iro)>0:
                         self.ishi_utsu(x, y, iro)
                         break
 
+    def mask_kaeseru(self,board,prediction_:list,iro):
+        prediction=copy.deepcopy(prediction_)
+        for y in range(len(board)):
+            for x in range(len(board[0])):
+                if not self.kaeseru(x,y,iro=iro)>0: prediction[y*len(board)+x]=-10
+        return prediction
+
     def predict(self,iro,loops,board):
         self.board=board
-        win = [0]*64
+        win = [0]*(self.wx*self.wy)
         self.save()
-        for y in range(8):
-            for x in range(8):
+        for y in range(self.wy):
+            for x in range(self.wx):
                 if self.kaeseru(x, y, iro)>0:
                     #msg += "."
                     #banmen()
-                    win[x+y*8] = 1
+                    win[x+y*self.wx] = 1
                     for i in range(loops):
                         self.ishi_utsu(x, y, iro)
                         self.uchiau(iro)
                         b, w = self.ishino_kazu()
+
                         if iro==BLACK and b>w:
-                            win[x+y*8] += 1
+                            win[x+y*self.wx] += 1
+                        elif iro==BLACK and b<w:
+                            win[x+y*self.wx] -= 1
+
                         if iro==WHITE and w>b:
-                            win[x+y*8] += 1
+                            win[x+y*self.wx] += 1
+                        elif iro==WHITE and w<b:
+                            win[x+y*self.wx] -= 1
+
                         self.load()
         return [w/loops for w in win]
     
@@ -139,6 +153,7 @@ class computer_MC:
             copy_b=copy.deepcopy(board)
             copy_b=self.to_black(copy_b,iro)
             self.win_probs_thistime.append((copy_b,wins))
+        wins=self.mask_kaeseru(board,self.predict(iro,loops,copy.deepcopy(board)),iro)
         max_id=wins.index(max(wins))
         x=max_id%self.wx
         y=max_id//self.wy

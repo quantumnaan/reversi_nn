@@ -8,6 +8,20 @@ BLACK=1 #player
 WHITE=2 #opponent
 c_ucb=1.0
 
+def board_cache(func):
+    c_boards = {}
+    def _wrapper(*args):
+        if len(c_boards)>10:
+            return func(*args)
+        flag=False
+        if len(c_boards)!=0:
+            for board in c_boards.keys():
+                if np.array(args[0])==np.array(board):
+                    return c_boards[board]
+        c_boards[args[0]] = func(*args)
+        return c_boards[args[0]]
+    return _wrapper
+
 def kaeseru(x,y,board,iro=BLACK):
     if board[y][x]!=0:
         return False
@@ -20,7 +34,7 @@ def kaeseru(x,y,board,iro=BLACK):
             while True:
                 sx+=dx
                 sy+=dy
-                if sx<0 or sx>len(board)-1 or sy<0 or sy>len(board[0])-1:
+                if sx<0 or sx>len(board[0])-1 or sy<0 or sy>len(board)-1:
                     break
                 if board[sy][sx]==0:
                     break
@@ -28,6 +42,7 @@ def kaeseru(x,y,board,iro=BLACK):
                     k+=1
                 if board[sy][sx]==iro:
                     total+=k
+                    if total>0: return True
                     break
     return total>0
 
@@ -40,10 +55,10 @@ def mask_kaeseru(board,prediction_:list):
 
 def ban_syokika(wx,wy):
     board=[[0]*wx for _ in range(wy)]
-    board[3][4]=BLACK
-    board[4][3]=BLACK
-    board[3][3]=WHITE
-    board[4][4]=WHITE
+    board[wy//2-1][wx//2]=BLACK
+    board[wy//2][wx//2-1]=BLACK
+    board[wy//2-1][wx//2-1]=WHITE
+    board[wy//2][wx//2]=WHITE
     return board
 
 def board_list2tensor(board:list):
@@ -58,21 +73,17 @@ def board_tensor2list(board:torch.tensor,board_x,board_y):
     return board.tolist()
 
 
-def uchiau(board,iro):
+def uchiau(board_,iro):#from 3-iro
+    board=deepcopy(board_)
     while True:
         if not uteru_masu(board,iro=BLACK) and not uteru_masu(board,iro=WHITE):
             break
         iro=3-iro
         if uteru_masu(board,iro=iro):
-            while True:
-                x=random.randint(0,len(board[0])-1)
-                y=random.randint(0,len(board)-1)
-                if kaeseru(x,y,board,iro=iro):
-                    board=ishi_utsu(x,y,board,iro)
-                    break
+            x,y=random.choice(valid_masu(board,iro))
+            board=ishi_utsu(x,y,board,iro)
     return board
-
-
+    
 
 def ishi_utsu(x,y,board,iro):
     board[y][x]=iro
@@ -99,8 +110,8 @@ def ishi_utsu(x,y,board,iro):
     return board
 
 def uteru_masu(board,iro=BLACK):#iro=BLACK
-    for y in range(8):
-        for x in range(8):
+    for y in range(len(board)):
+        for x in range(len(board[0])):
             if kaeseru(x,y,board,iro):
                 return True
     return False
@@ -108,8 +119,8 @@ def uteru_masu(board,iro=BLACK):#iro=BLACK
 def ishino_kazu(board):
     b=0
     w=0
-    for y in range(8):
-        for x in range(8):
+    for y in range(len(board)):
+        for x in range(len(board[0])):
             if board[y][x]==BLACK: b+=1
             if board[y][x]==WHITE: w+=1
 
@@ -136,3 +147,10 @@ def ex_board(board):
     for i in range(len(ret)):
         ret[i]=[-1]+ret[i]+[-1]
     return ret
+
+def valid_masu(board,iro):
+    ans=[]
+    for y in range(len(board)):
+        for x in range(len(board[0])):
+            if kaeseru(x,y,board,iro=iro): ans.append((x,y))
+    return ans
