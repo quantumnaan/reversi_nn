@@ -34,3 +34,5 @@ record/win_probs_88.pkl
 record/win_probs_nn_88.pkl
 refference/~$fys_slide_figures.pptx
 refference/fys_slide_figures.pptx
+__pycache__/reversi_az.cpython-39.pyc
+__pycache__/utils.cpython-39.pyc

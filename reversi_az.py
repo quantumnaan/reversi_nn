@@ -97,8 +97,8 @@ class AttentionBlock(nn.Module):
         x=x.view(x.size()[0],-1)
         x=self.linear1(x)
         x=self.relu1(x)
-        x_tmp=x
-        x_tmp_size=x_tmp.size()
+        # x_tmp=x
+        # x_tmp_size=x_tmp.size()
         x=x.view(*size_init)
         x=self.conv1(x)
         x=self.bn1(x)
@@ -109,7 +109,7 @@ class AttentionBlock(nn.Module):
         x=self.linear_form(x)
         x=self.sigmoid(x)
         
-        x=torch.mul(x,x_tmp.view(x_tmp.size()[0],-1))
+        #x=torch.mul(x,x_tmp.view(x_tmp.size()[0],-1))
         return x
 
 
@@ -153,8 +153,9 @@ class ResNet2(nn.Module):# input:(batches,1,board_x+2,board_y+2)->output:(board_
     def forward(self,x):
         init_size=x.size()
         #print(init_size)
+        init_x_mask=x
         x=x.view(x.size()[0],-1)
-        init_x=x
+        init_x_skip=x
         #print(init_x.size())
         x=self.linear1(x)
         x=x.view(*init_size)
@@ -163,10 +164,10 @@ class ResNet2(nn.Module):# input:(batches,1,board_x+2,board_y+2)->output:(board_
         x=self.linear2(x)
         x=self.tanh1(x)
         x=self.linear3(x)
-        x+=init_x        
-        x=x.view(*init_size)
-        x=self.attention(x)
-        y=x
+        x+=init_x_skip        
+        # x=x.view(*init_size)
+        y=self.attention(init_x_mask)
+        x=x*y
         x=self.linear4(x)
         x=self.tanh3(x)
         return x,y
@@ -237,7 +238,7 @@ class AlphaZeroAgent:
             #self.agent_net eval??
             with torch.no_grad():
                 prediction=self.agent_net(board_nn)[0]
-            masked_pred=mask_kaeseru(board,prediction.tolist())
+            masked_pred=mask_kaeseru(board,prediction[0].tolist())
 
             action=masked_pred.index(max(masked_pred))
             x=action%self.board_x
@@ -307,7 +308,8 @@ class AlphaZeroAgent:
         #     win_prob,win_index=self.simple_mcts(node.board)
         # else:
         nn_board=board_list2tensor(ex_board(to_black(node.board,node.iro)))
-        ref_win_probs=torch.flatten(self.predict(nn_board)).tolist()
+        ref_win_probs,_=self.predict(nn_board)
+        ref_win_probs=ref_win_probs.flatten().tolist()
         node.win_probs=ref_win_probs
         if node.visit_time>=5 and not node.is_expanded: node.expand()
 

@@ -51,7 +51,7 @@ def mask_kaeseru(board,prediction_:list):
     prediction=deepcopy(prediction_)
     for y in range(len(board)):
         for x in range(len(board[0])):
-            if not kaeseru(x,y,board): prediction[y*len(board)+x]=-10
+            if not kaeseru(x,y,board): prediction[y*len(board[0])+x]=-10
     return prediction
 
 def ban_syokika(wx,wy):

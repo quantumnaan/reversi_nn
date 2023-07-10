@@ -19,34 +19,28 @@ space=0
 color=[0]*2
 who=["you","computer"]
 back=[]
+board=[]
+width=6
 
 
-for y in range(8):
-    back.append([0]*8)
-
-board=[
-    [0,0,0,0,0,0,0,0],
-    [0,0,0,0,0,0,0,0],
-    [0,0,0,0,0,0,0,0],
-    [0,0,0,0,0,0,0,0],
-    [0,0,0,0,0,0,0,0],
-    [0,0,0,0,0,0,0,0],
-    [0,0,0,0,0,0,0,0],
-    [0,0,0,0,0,0,0,0]
-]
+for y in range(width):
+    back.append([0]*width)
+for y in range(width):
+    board.append([0]*width)
 
 
-agent_mc=computer_MC(8,8)
-agent_nn=OthelloAgent8(8,8)
-agent_az=AlphaZeroAgent()
+agent_mc=computer_MC(width,width)
+agent_nn=OthelloAgent8(width,width)
+agent_az=AlphaZeroAgent(board_x=6,board_y=6)
+agent_az.load_checkpoint(filename='checkpoint_az66_okeru.pth.tar')
 
 def click(e):
     global mx,my,mc
     mc=1
     mx=int(e.x/80)
     my=int(e.y/80)
-    if mx>7: mx=7
-    if my>7: my=7
+    if mx>(width-1): mx=(width-1)
+    if my>(width-1): my=(width-1)
     # if board[my][mx]==0:
     #     ishi_utsu(mx,my,BLACK)
     # banmen()
@@ -54,8 +48,8 @@ def click(e):
 def banmen():
     cvs.delete("all")
     cvs.create_text(320,670,text=msg,fill="silver",font=FS)
-    for y in range(8):
-        for x in range(8):
+    for y in range(width):
+        for x in range(width):
             X=x*80
             Y=y*80
             cvs.create_rectangle(X,Y,X+80,Y+80,outline='black')
@@ -68,13 +62,13 @@ def banmen():
 def ban_syokika():
     global space
     space=60
-    for y in range(8):
-        for x in range(8):
+    for y in range(width):
+        for x in range(width):
             board[y][x]=0
-    board[3][4]=BLACK
-    board[4][3]=BLACK
+    board[2][3]=BLACK
+    board[3][2]=BLACK
+    board[2][2]=WHITE
     board[3][3]=WHITE
-    board[4][4]=WHITE
 
 def ishi_utsu(x,y,iro):
     board[y][x]=iro
@@ -86,7 +80,7 @@ def ishi_utsu(x,y,iro):
             while True:
                 sx+=dx
                 sy+=dy
-                if sx<0 or sx>7 or sy<0 or sy>7:
+                if sx<0 or sx>(width-1) or sy<0 or sy>(width-1):
                     break
                 if board[sy][sx]==0:
                     break
@@ -111,7 +105,7 @@ def kaeseru(x,y,iro):
             while True:
                 sx+=dx
                 sy+=dy
-                if sx<0 or sx>7 or sy<0 or sy>7:
+                if sx<0 or sx>(width-1) or sy<0 or sy>(width-1):
                     break
                 if board[sy][sx]==0:
                     break
@@ -123,8 +117,8 @@ def kaeseru(x,y,iro):
     return total
 
 def uteru_masu(iro):
-    for y in range(8):
-        for x in range(8):
+    for y in range(width):
+        for x in range(width):
             if kaeseru(x,y,iro)>0:
                 return True
 
@@ -133,8 +127,8 @@ def uteru_masu(iro):
 def ishino_kazu():
     b=0
     w=0
-    for y in range(8):
-        for x in range(8):
+    for y in range(width):
+        for x in range(width):
             if board[y][x]==BLACK: b+=1
             if board[y][x]==WHITE: w+=1
 
@@ -142,19 +136,19 @@ def ishino_kazu():
 
 def computer_0(iro):
     while True:
-        rx=random.randint(0,7)
-        ry=random.randint(0,7)
+        rx=random.randint(0,(width-1))
+        ry=random.randint(0,(width-1))
         if kaeseru(rx,ry,iro)>0:
             return rx,ry
 
 def save():
-    for y in range(8):
-        for x in range(8):
+    for y in range(width):
+        for x in range(width):
             back[y][x] = board[y][x]
 
 def load():
-    for y in range(8):
-        for x in range(8):
+    for y in range(width):
+        for x in range(width):
             board[y][x] = back[y][x]
 
 def uchiau(iro):
@@ -164,59 +158,59 @@ def uchiau(iro):
         iro = 3-iro
         if uteru_masu(iro)==True:
             while True:
-                x = random.randint(0, 7)
-                y = random.randint(0, 7)
+                x = random.randint(0, (width-1))
+                y = random.randint(0, (width-1))
                 if kaeseru(x, y, iro)>0:
                     ishi_utsu(x, y, iro)
                     break
 
 def computer_2(iro, loops):
     global msg
-    win = [0]*64
+    win = [0]*(width*width)
     save()
-    for y in range(8):
-        for x in range(8):
+    for y in range(width):
+        for x in range(width):
             if kaeseru(x, y, iro)>0:
                 msg += "."
                 banmen()
-                win[x+y*8] = 1
+                win[x+y*width] = 1
                 for i in range(loops):
                     ishi_utsu(x, y, iro)
                     uchiau(iro)
                     b, w = ishino_kazu()
                     if iro==BLACK and b>w:
-                        win[x+y*8] += 1
+                        win[x+y*width] += 1
                     if iro==WHITE and w>b:
-                        win[x+y*8] += 1
+                        win[x+y*width] += 1
                     load()
     m = 0
     n = 0
-    for i in range(64):
+    for i in range((width*width)):
         if win[i]>m:
             m = win[i]
             n = i
-    x = n%8
-    y = int(n/8)
+    x = n%width
+    y = int(n/width)
     return x, y
 
 def computer_2_predict(iro, loops):
    #global msg
-    win = [0]*64
+    win = [0]*(width*width)
     save()
-    for y in range(8):
-        for x in range(8):
+    for y in range(width):
+        for x in range(width):
             if kaeseru(x, y, iro)>0:
                 #msg += "."
                 #banmen()
-                win[x+y*8] = 1
+                win[x+y*width] = 1
                 for i in range(loops):
                     ishi_utsu(x, y, iro)
                     uchiau(iro)
                     b, w = ishino_kazu()
                     if iro==BLACK and b>w:
-                        win[x+y*8] += 1
+                        win[x+y*width] += 1
                     if iro==WHITE and w>b:
-                        win[x+y*8] += 1
+                        win[x+y*width] += 1
                     load()
     return win/loops
 
@@ -257,7 +251,7 @@ def main():
                     space-=1
                     proc=3
         else: 
-            cx,cy=agent_az.select_action(board)
+            (cx,cy)=agent_az.select_action(board)
             #cx,cy=agent_nn.select_action(board)#computer_2(color[turn],200)
             #cx,cy=agent_mc.action(color[turn],200,board)
             ishi_utsu(int(cx),int(cy),color[turn])
