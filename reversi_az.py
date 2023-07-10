@@ -38,30 +38,18 @@ Transition=namedtuple(
     'state action next_state reward'
 )
 
-
-class ResBlock(nn.Module):
-    def __init__(self,in_channels,out_channels):
-        super(ResBlock,self).__init__()
-        self.conv1=nn.Conv2d(in_channels,out_channels,kernel_size=3)
-        self.bn1=nn.BatchNorm2d(out_channels)
-        self.sigmoid=nn.Sigmoid()
-        self.conv2=nn.Conv2d(out_channels,out_channels,kernel_size=3)
-        self.bn2=nn.BatchNorm2d(out_channels)
-        self.linear_shape=nn.Linear(8*8,64*4*4)
+# not using
+class SelfAttn(nn.Module):
+    def __init__(self,board_x,board_y):
+        super(SelfAttn,self).__init__()
+        self.selfattn=nn.MultiheadAttention((board_x+2)*(board_y+2),8)
     
     def forward(self,x):
-        x_init=x
-        x=self.conv1(x)
-        x=self.bn1(x)
-        x=self.sigmoid(x)
-        x=self.conv2(x)
-        x=self.bn2(x)
-        #print(x.size(),x_init.size())
-        x_init=self.linear_shape((x_init).view(x_init.size()[0],-1))
-        x+=x_init.view(x_init.size()[0],-1,4,4)
+        x,_=self.selfattn(x,x,x)
         return x
 
 
+# not using
 class ResNet(nn.Module):# input:(batches,1,board_x+2,board_y+2)->output:(board_x*board_y)
     def __init__(self,board_x,board_y,args):
         super(ResNet,self).__init__()
@@ -86,10 +74,104 @@ class ResNet(nn.Module):# input:(batches,1,board_x+2,board_y+2)->output:(board_x
         x=self.tanh1(x)
         x=self.linear3(x)
         x+=init_x
-        x=self.tanh2(x)
         x=self.linear4(x)
         x=self.tanh3(x)
         return x
+
+
+
+class AttentionBlock(nn.Module):
+    def __init__(self,board_x,board_y):
+        super(AttentionBlock,self).__init__()
+        self.linear1=nn.Linear((board_x+2)*(board_y+2),(board_x+2)*(board_y+2))
+        self.relu1=nn.ReLU()
+        self.conv1=nn.Conv2d(1,128,kernel_size=3)
+        self.bn1=nn.BatchNorm2d(128)
+        self.conv2=nn.Conv2d(128,64,kernel_size=3)
+        self.bn2=nn.BatchNorm2d(64)
+        self.linear_form=nn.Linear(64*4*4,(board_x+2)*(board_y+2))
+        self.sigmoid=nn.Sigmoid()
+    
+    def forward(self,x):
+        size_init=x.size()
+        x=x.view(x.size()[0],-1)
+        x=self.linear1(x)
+        x=self.relu1(x)
+        x_tmp=x
+        x_tmp_size=x_tmp.size()
+        x=x.view(*size_init)
+        x=self.conv1(x)
+        x=self.bn1(x)
+        x=self.conv2(x)
+        x=self.bn2(x)
+        #print(x.size())
+        x=x.view(x.size()[0],-1)
+        x=self.linear_form(x)
+        x=self.sigmoid(x)
+        
+        x=torch.mul(x,x_tmp.view(x_tmp.size()[0],-1))
+        return x
+
+
+
+class ResBlock(nn.Module):
+    def __init__(self,in_channels,out_channels):
+        super(ResBlock,self).__init__()
+        self.conv1=nn.Conv2d(in_channels,out_channels,kernel_size=3)
+        self.bn1=nn.BatchNorm2d(out_channels)
+        self.sigmoid=nn.Sigmoid()
+        self.conv2=nn.Conv2d(out_channels,out_channels,kernel_size=3)
+        self.bn2=nn.BatchNorm2d(out_channels)
+        self.linear_shape=nn.Linear(8*8,64*4*4)
+    
+    def forward(self,x):
+        x_init=x
+        x=self.conv1(x)
+        x=self.bn1(x)
+        x=self.sigmoid(x)
+        x=self.conv2(x)
+        x=self.bn2(x)
+        #print(x.size(),x_init.size())
+        x_init=self.linear_shape((x_init).view(x_init.size()[0],-1))
+        x+=x_init.view(x_init.size()[0],-1,4,4)
+        return x
+
+
+class ResNet2(nn.Module):# input:(batches,1,board_x+2,board_y+2)->output:(board_x*board_y)
+    def __init__(self,board_x,board_y,args):
+        super(ResNet2,self).__init__()
+        self.attention=AttentionBlock(board_x,board_y)#AttentionBlock(board_x,board_y)
+        self.block1=ResBlock(1,64)
+        self.linear1=nn.Linear((board_x+2)*(board_y+2),(board_x+2)*(board_y+2))
+        self.linear2=nn.Linear(1024,256)
+        self.linear3=nn.Linear(256,(board_x+2)*(board_y+2))
+        self.linear4=nn.Linear((board_x+2)*(board_y+2),board_x*board_y)
+        self.tanh1=nn.Tanh()
+        self.tanh2=nn.Tanh()
+        self.tanh3=nn.Tanh()
+
+    def forward(self,x):
+        init_size=x.size()
+        #print(init_size)
+        x=x.view(x.size()[0],-1)
+        init_x=x
+        #print(init_x.size())
+        x=self.linear1(x)
+        x=x.view(*init_size)
+        x=self.block1(x)
+        x=x.view(x.size()[0],-1)
+        x=self.linear2(x)
+        x=self.tanh1(x)
+        x=self.linear3(x)
+        x+=init_x        
+        x=x.view(*init_size)
+        x=self.attention(x)
+        y=x
+        x=self.linear4(x)
+        x=self.tanh3(x)
+        return x,y
+
+
 
 class Node:
     def __init__(self,board,iro,max_d=5,prev_action=None,parent_node=None):
@@ -126,10 +208,11 @@ class Node:
 
 class AlphaZeroAgent:
     def __init__(self,board_x=6,board_y=6,args=args):#assume that iro=black
-        self.agent_net=ResNet(board_x,board_y,args).to(device)
+        self.agent_net=ResNet2(board_x,board_y,args).to(device)
         self.optimizer=optim.AdamW(self.agent_net.parameters(),lr=args['lr_mc'],amsgrad=True)
-        self.optimizer=optim.AdamW(self.agent_net.parameters(),lr=args['lr_sim'],amsgrad=True)
+        self.optimizer_okeru=optim.AdamW(self.agent_net.parameters(),lr=args['lr_sim'],amsgrad=True)
         self.loss=nn.SmoothL1Loss()
+        self.loss_okeru=nn.MSELoss()
         self.board_x=board_x
         self.board_y=board_y
         self.board=[[0]*self.board_x for _ in range(self.board_y)]
@@ -172,9 +255,20 @@ class AlphaZeroAgent:
         else:
             x,y=random.choice(valid_masu(board,iro=BLACK))
         return (x,y),win_probs
-    
+
+
+    def train_dir_okeru(self,boards,okerus):
+        _,okeru_pred=self.predict(boards)
+        loss=self.loss_okeru(okeru_pred,okerus)
+        self.optimizer_okeru.zero_grad()
+        loss.backward()
+        # torch.nn.utils.clip_grad_value_(self.agent_net.parameters(),100)
+        self.optimizer.step()
+        return okeru_pred
+
+
     def train_dir(self,states,answers):
-        state_action_values=self.predict(states)
+        state_action_values,_=self.predict(states)
         loss=self.loss(state_action_values,answers)
         self.optimizer.zero_grad()
         loss.backward()
@@ -368,29 +462,42 @@ class AlphaZeroAgent:
             return random.sample(self.win_probs_this_time,samples)
     
 if __name__=='__main__':
+    from torchviz import make_dot
+    from PIL import Image
     agent_az=AlphaZeroAgent(board_x=6,board_y=6)
-    try:
-        agent_az.load_checkpoint()
-    except:
-        print('model does not match, but go on')
-    mc_agent=computer_MC(6,6)
-    mc_agent.load_wins()
-    for _ in range(100):
-        boards,answers=[],[]
-        for board,answer in mc_agent.sample(args['batchs']):
-            # in agent_mc, "board" is a list of 8x8 and "answer" is a list of 64
-            board=torch.from_numpy(np.array(ex_board(board),dtype=np.float32))
-            answer=torch.from_numpy(np.array(answer,dtype=np.float32))
-            boards.append(board)
-            answers.append(answer)
-        boards=torch.stack(boards,dim=0).view(args['batchs'],1,8,8)
-        answers=torch.stack(answers,dim=0)
-        state_action_values=agent_az.train_dir(boards,answers)
-        #state_action_value=agent_az.predict(boards[0].view(1,1,6,6))
+    # img=make_dot(probs,params=dict(agent_az.agent_net.named_parameters()))
+    # img.format="png"
+
+    # img.render("model_img")
+
+    dummy_input=torch.randn(1,1,8,8)#ダミーの入力を用意する
+    input_names = [ "input"]
+    output_names = [ "output" ]
+
+    torch.onnx.export(agent_az.agent_net, dummy_input, "./image/test_model.onnx", verbose=True,input_names=input_names,output_names=output_names)
+
+    # try:
+    #     agent_az.load_checkpoint()
+    # except:
+    #     print('model does not match, but go on')
+    # mc_agent=computer_MC(6,6)
+    # mc_agent.load_wins()
+    # for _ in range(100):
+    #     boards,answers=[],[]
+    #     for board,answer in mc_agent.sample(args['batchs']):
+    #         # in agent_mc, "board" is a list of 8x8 and "answer" is a list of 64
+    #         board=torch.from_numpy(np.array(ex_board(board),dtype=np.float32))
+    #         answer=torch.from_numpy(np.array(answer,dtype=np.float32))
+    #         boards.append(board)
+    #         answers.append(answer)
+    #     boards=torch.stack(boards,dim=0).view(args['batchs'],1,8,8)
+    #     answers=torch.stack(answers,dim=0)
+    #     state_action_values=agent_az.train_dir(boards,answers)
+    #     #state_action_value=agent_az.predict(boards[0].view(1,1,6,6))
 
 
-    print("board",boards[0])
-    print('mc_pred',answers[0])
-    print('nn_pred',state_action_values[0])
+    # print("board",boards[0])
+    # print('mc_pred',answers[0])
+    # print('nn_pred',state_action_values[0])
 
-    agent_az.save_checkpoint()
+    # agent_az.save_checkpoint()

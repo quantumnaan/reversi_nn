@@ -2,6 +2,7 @@ import tkinter
 import tkinter.messagebox
 import random
 from computer import computer_MC
+from reversi_az import AlphaZeroAgent
 
 FS=("Times New Roman",30)
 FL=("Times New Roman",80)
@@ -15,7 +16,7 @@ turn=0
 msg=''
 space=0
 color=[0]*2
-who=["you","computer"]
+who=["alpha zero","monte carlo"]
 board=[]
 back=[]
 
@@ -28,6 +29,7 @@ for y in range(6):
 
 agent_mc1=computer_MC(6,6)
 agent_mc2=computer_MC(6,6)
+agent_az=AlphaZeroAgent()
 
 def click(e):
     global mx,my,mc
@@ -247,13 +249,13 @@ def main():
     elif proc==2:
         if turn==0:
             #cx,cy=agent_nn.select_action(board)#computer_2(color[turn],200)
-            cx,cy=agent_mc1.action(color[turn],70,board)
+            (cx,cy),_=agent_az.select_action_mcts(board)
             ishi_utsu(int(cx),int(cy),color[turn])
             space-=1
             proc=3
         else: 
             #cx,cy=agent_nn.select_action(board)#computer_2(color[turn],200)
-            cx,cy=agent_mc2.action(color[turn],70,board)
+            cx,cy=agent_mc1.action(color[turn],70,board)
             ishi_utsu(int(cx),int(cy),color[turn])
             space-=1
             proc=3
@@ -277,9 +279,9 @@ def main():
         cp_win=(color[1]==BLACK and b>w) or (color[1]==WHITE and w>b)
         tkinter.messagebox.showinfo("end",f"black:{b},white:{w}")
         if (color[0]==BLACK and b>w) or (color[0]==WHITE and w>b):
-            tkinter.messagebox.showinfo("","you win!")
+            tkinter.messagebox.showinfo("","alpha zero win!")
         elif (color[1]==BLACK and b>w) or (color[1]==WHITE and w>b):
-            tkinter.messagebox.showinfo("","comuputer win")
+            tkinter.messagebox.showinfo("","monte carlo win")
         else:
             tkinter.messagebox.show.info("","draw")
         proc=0
@@ -293,4 +295,4 @@ cvs.pack()
 root.after(100,main)
 root.mainloop()
 agent_mc1.save_wins(agent_mc1.win_probs_thistime,filename='win_probs_mc.pkl')
-agent_mc2.save_wins(agent_mc2.win_probs_thistime,filename='win_probs_mc.pkl')
+#agent_mc2.save_wins(agent_mc2.win_probs_thistime,filename='win_probs_mc.pkl')

@@ -155,3 +155,11 @@ def valid_masu(board,iro):
         for x in range(len(board[0])):
             if kaeseru(x,y,board,iro=iro): ans.append((x,y))
     return ans
+
+def okeru_binary(board_:list):
+    ret=[[0]*len(board_[0]) for _ in range(len(board_))]
+    for y in range(len(board_)):
+        for x in range(len(board_[0])):
+            if kaeseru(x,y,board_): ret[y][x]=1
+    
+    return ret

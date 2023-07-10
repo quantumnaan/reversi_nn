@@ -15,13 +15,13 @@ def train():
     agent_az=AlphaZeroAgent(board_x=6,board_y=6)
     agent_az.load_checkpoint(filename='checkpoint_az66.pth.tar')
     
-    for i in range(3):
-        # agent_az.sim_games(10)
+    for i in range(5):
+        # agent_az.sim_games(5)
         # agent_az.save_wins(agent_az.win_probs_this_time,filename='win_probs_nn66.pkl')
         # agent_az.win_probs_this_time=[]
         batchs=512
         batchs=agent_az.load_wins(filename='win_probs_mc.pkl',load_len=batchs*10) //10
-        for j in range(1000):
+        for j in range(1):
             samples=agent_az.sample_from_whole(batchs)
             boards=[]
             answers=[]
@@ -33,12 +33,54 @@ def train():
             boards=torch.stack(boards,dim=0).view(batchs,1,8,8)
             answers=torch.stack(answers,dim=0)
             agent_az.train_dir(boards,answers)
-        print(f'{i}-th loop in train_nn')
+        print(f'{i}-th loop in train_nn done')
     agent_az.save_checkpoint(filename='checkpoint_az66.pth.tar')
-    print(board)
+    print(board)    
     print(answer)
     print(agent_az.predict(board.view(1,1,8,8)))
+    fig=plt.figure(figsize=(3,3))
+    ax=fig.add_subplot(111)
+    plt.plot(answer.tolist(),label='answer(MC)')
+    plt.plot(agent_az.predict(board.view(1,1,8,8))[0].tolist(),label='predict(NN)')
+    plt.legend()
+    plt.show()
 
+def train_okeru():
+    agent_az=AlphaZeroAgent(board_x=6,board_y=6)
+    agent_az.load_checkpoint(filename='checkpoint_az66_okeru.pth.tar')
+    
+    for i in range(10):
+        # agent_az.sim_games(5)
+        # agent_az.save_wins(agent_az.win_probs_this_time,filename='win_probs_nn66.pkl')
+        # agent_az.win_probs_this_time=[]
+        batchs=512
+        batchs=agent_az.load_wins(filename='win_probs_mc.pkl',load_len=batchs*10) //10
+        for j in range(100):
+            samples=agent_az.sample_from_whole(batchs)
+            boards=[]
+            answers_okeru=[]
+            answers=[]
+            for board,answer in samples:
+                board_okeru=okeru_binary(ex_board(board))
+                board=torch.from_numpy(np.array(ex_board(board),dtype=np.float32))
+                answer_okeru=torch.from_numpy(np.array(board_okeru,dtype=np.float32))
+                boards.append(board)
+                answers.append(answer)
+            boards=torch.stack(boards,dim=0).view(batchs,1,8,8)
+            answers=torch.stack(answers,dim=0).view(batchs,-1)
+            agent_az.train_dir_okeru(boards,answers)
+        print(f'{i}-th loop in train_nn done')
+    agent_az.save_checkpoint(filename='checkpoint_az66_okeru.pth.tar')
+    print(board)    
+    print(answer)
+    _,okeru=agent_az.predict(board.view(1,1,8,8))
+    print(okeru)
+    fig=plt.figure(figsize=(3,3))
+    ax=fig.add_subplot(111)
+    plt.plot(answer.flatten().tolist(),label='answer(MC)')
+    plt.plot(okeru[0].tolist(),label='predict(NN)')
+    plt.legend()
+    plt.show()
 
 
 def computer_0(board,iro):
@@ -117,5 +159,5 @@ def vs_rand_demo():
         #print(board)
             
 
-train()
+train_okeru()
 #vs_rand_demo()
