@@ -23,7 +23,8 @@ from computer import computer_MC
 # assume here the color of the player is black without loss of generality
 
 
-device='cuda' if torch.cuda.is_available() else 'cpu'
+torch.set_default_tensor_type('torch.cuda.FloatTensor')
+
 args={
     'channels':128,
     'kernels':2,
@@ -140,7 +141,7 @@ class ResBlock(nn.Module):
 class ResNet2(nn.Module):# input:(batches,1,board_x+2,board_y+2)->output:(board_x*board_y)
     def __init__(self,board_x,board_y,args):
         super(ResNet2,self).__init__()
-        self.attention=AttentionBlock(board_x,board_y)#AttentionBlock(board_x,board_y)
+        self.attention=AttentionBlock(board_x,board_y).to(device)#AttentionBlock(board_x,board_y)
         self.block1=ResBlock(1,64)
         self.linear1=nn.Linear((board_x+2)*(board_y+2),(board_x+2)*(board_y+2))
         self.linear2=nn.Linear(1024,256)
@@ -209,6 +210,7 @@ class Node:
 
 class AlphaZeroAgent:
     def __init__(self,board_x=6,board_y=6,args=args):#assume that iro=black
+
         self.agent_net=ResNet2(board_x,board_y,args).to(device)
         self.optimizer=optim.AdamW(self.agent_net.parameters(),lr=args['lr_mc'],amsgrad=True)
         self.optimizer_okeru=optim.AdamW(self.agent_net.parameters(),lr=args['lr_sim'],amsgrad=True)

@@ -13,6 +13,7 @@ class SelfAttention(nn.Module):
 
         return x, attn_output_weights
 
+print(torch.cuda.is_available())
 input_dim = 512
 hidden_dim = 64
 num_heads = 8

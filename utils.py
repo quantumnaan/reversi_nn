@@ -8,6 +8,8 @@ BLACK=1 #player
 WHITE=2 #opponent
 c_ucb=1.2
 MAX_SAVE_WIN_PROB=10000
+device='cuda' if torch.cuda.is_available() else 'cpu'
+if device=='cuda': print('using cuda')
 
 def board_cache(func):
     c_boards = {}
@@ -64,7 +66,7 @@ def ban_syokika(wx,wy):
 
 def board_list2tensor(board:list):
     ret=np.array(deepcopy(board))
-    ret=torch.tensor(ret.astype(np.float32))
+    ret=torch.tensor(ret.astype(np.float32),device=device)
     # contiguous??
     ret=ret.view(1,1,ret.size()[0],ret.size()[0])
     return ret
@@ -147,6 +149,13 @@ def ex_board(board):
     ret=[[-1]*sx]+ret+[[-1]*sx]
     for i in range(len(ret)):
         ret[i]=[-1]+ret[i]+[-1]
+    return ret
+
+def red_board(board):
+    ret=deepcopy(board)
+    ret=ret[1:-1]
+    for i in range(len(ret)):
+        ret[i]=ret[i][1:-1]
     return ret
 
 def valid_masu(board,iro):

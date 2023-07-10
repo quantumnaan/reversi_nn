@@ -11,46 +11,46 @@ from utils import*
 from reversi_nn import OthelloAgent8
 from reversi_az import AlphaZeroAgent
 
-def train():
-    agent_az=AlphaZeroAgent(board_x=6,board_y=6)
-    agent_az.load_checkpoint(filename='checkpoint_az66.pth.tar')
+# def train():
+#     agent_az=AlphaZeroAgent(board_x=6,board_y=6)
+#     agent_az.load_checkpoint(filename='checkpoint_az66.pth.tar')
     
-    for i in range(5):
-        # agent_az.sim_games(5)
-        # agent_az.save_wins(agent_az.win_probs_this_time,filename='win_probs_nn66.pkl')
-        # agent_az.win_probs_this_time=[]
-        batchs=512
-        batchs=agent_az.load_wins(filename='win_probs_mc.pkl',load_len=batchs*10) //10
-        for j in range(100):
-            samples=agent_az.sample_from_whole(batchs)
-            boards=[]
-            answers=[]
-            for board,answer in samples:
-                board=torch.from_numpy(np.array(ex_board(board),dtype=np.float32))
-                answer=torch.from_numpy(np.array(answer,dtype=np.float32))
-                boards.append(board)
-                answers.append(answer)
-            boards=torch.stack(boards,dim=0).view(batchs,1,8,8)
-            answers=torch.stack(answers,dim=0)
-            agent_az.train_dir(boards,answers)
-        print(f'{i}-th loop in train_nn done')
-        agent_az.save_checkpoint(filename='checkpoint_az66.pth.tar')
-    print(board)    
-    print(answer)
-    print(agent_az.predict(board.view(1,1,8,8)))
-    fig=plt.figure(figsize=(3,3))
-    ax=fig.add_subplot(111)
-    plt.plot(answer.tolist(),label='answer(MC)')
-    plt.plot(agent_az.predict(board.view(1,1,8,8))[0].tolist(),label='predict(NN)')
-    plt.legend()
-    plt.show()
+#     for i in range(5):
+#         # agent_az.sim_games(5)
+#         # agent_az.save_wins(agent_az.win_probs_this_time,filename='win_probs_nn66.pkl')
+#         # agent_az.win_probs_this_time=[]
+#         batchs=512
+#         batchs=agent_az.load_wins(filename='win_probs_mc.pkl',load_len=batchs*10) //10
+#         for j in range(100):
+#             samples=agent_az.sample_from_whole(batchs)
+#             boards=[]
+#             answers=[]
+#             for board,answer in samples:
+#                 board=torch.from_numpy(np.array(ex_board(board),dtype=np.float32))
+#                 answer=torch.from_numpy(np.array(answer,dtype=np.float32))
+#                 boards.append(board)
+#                 answers.append(answer)
+#             boards=torch.stack(boards,dim=0).view(batchs,1,8,8)
+#             answers=torch.stack(answers,dim=0)
+#             agent_az.train_dir(boards,answers)
+#         print(f'{i}-th loop in train_nn done')
+#         agent_az.save_checkpoint(filename='checkpoint_az66.pth.tar')
+#     print(board)    
+#     print(answer)
+#     print(agent_az.predict(board.view(1,1,8,8)))
+#     fig=plt.figure(figsize=(3,3))
+#     ax=fig.add_subplot(111)
+#     plt.plot(answer.tolist(),label='answer(MC)')
+#     plt.plot(agent_az.predict(board.view(1,1,8,8))[0].tolist(),label='predict(NN)')
+#     plt.legend()
+#     plt.show()
 
 def train_okeru():
     agent_az=AlphaZeroAgent(board_x=6,board_y=6)
     agent_az.load_checkpoint(filename='checkpoint_az66_okeru.pth.tar')
     
-    for i in range(20):
-        agent_az.sim_games(10)
+    for i in range(1):
+        agent_az.sim_games(1)
         agent_az.save_wins(agent_az.win_probs_this_time,filename='win_probs_nn66.pkl')
         agent_az.win_probs_this_time=[]
         batchs=512
@@ -62,9 +62,9 @@ def train_okeru():
             answers=[]
             for board,answer in samples:
                 board_okeru = okeru_binary(ex_board(board))
-                board = torch.from_numpy(np.array(ex_board(board),dtype=np.float32))
-                answer_okeru = torch.from_numpy(np.array(board_okeru,dtype=np.float32))
-                answer = torch.from_numpy(np.array(answer,dtype=np.float32))
+                board = torch.from_numpy(np.array(ex_board(board),dtype=np.float32)).to(device)
+                answer_okeru = torch.from_numpy(np.array(board_okeru,dtype=np.float32)).to(device)
+                answer = torch.from_numpy(np.array(answer,dtype=np.float32)).to(device)
                 boards.append(board)
                 answers_okeru.append(answer_okeru)
                 answers.append(answer)
@@ -75,15 +75,18 @@ def train_okeru():
             agent_az.train_dir(boards,answers)
         print(f'{i}-th loop in train_nn done')
     agent_az.save_checkpoint(filename='checkpoint_az66_okeru.pth.tar')
-    print(board)    
-    print(answer)
+
     pred,okeru=agent_az.predict(board.view(1,1,8,8))
-    print(okeru)
-    fig=plt.figure(figsize=(3,3))
-    ax=fig.add_subplot(111)
-    plt.plot(answer.flatten().tolist(),label='answer(MC)')
-    plt.plot(pred.flatten().tolist(),label='predict(NN)')
-    plt.legend()
+    fig=plt.figure(figsize=(6,3))
+    ax11=fig.add_subplot(121)
+    ax12=fig.add_subplot(122)
+    make_frame(ax11,red_board(board.tolist()),answer.flatten().tolist(),BLACK)
+    make_frame(ax12,red_board(board.tolist()),pred.flatten().tolist(),BLACK)
+    # make_frame(ax21,board.tolist(),answer_okeru.flatten().tolist(),BLACK)
+    # make_frame(ax22,board.tolist(),okeru.flatten().tolist(),BLACK)
+    print(answer.size())
+    print(pred.flatten().size())
+    #plt.legend()
     plt.show()
 
 
@@ -104,9 +107,9 @@ def make_frame(ax,board,win_probs,iro):
             #print(plt.fill(x, y, color="green", alpha=np.clip(win_probs[j*8+i],0,1)))
             if iro==BLACK: 
                 win_here=win_probs[j*6+i]
-                if win_here>0: plt.fill(x, y, color="green", alpha=np.clip(win_probs[j*6+i],0,1))
-                else: plt.fill(x, y, color="red", alpha=np.clip(-win_probs[j*6+i],0,1))
-            else : plt.fill(x, y, color="white", alpha=1)
+                if win_here>0: ax.fill(x, y, color="green", alpha=np.clip(win_probs[j*6+i],0,1))
+                else: ax.fill(x, y, color="red", alpha=np.clip(-win_probs[j*6+i],0,1))
+            else : ax.fill(x, y, color="white", alpha=1)
             if board[j][i]==BLACK:
                 c=patches.Circle(xy=(i+0.5, 5.5-j), radius=0.2, fc='b', ec='b')
                 ax.add_patch(c)
@@ -116,7 +119,7 @@ def make_frame(ax,board,win_probs,iro):
 
 def vs_rand_demo():
     agent_az_demo=AlphaZeroAgent(board_x=6,board_y=6)
-    agent_az_demo.load_checkpoint(filename='checkpoint_az66.pth.tar')
+    agent_az_demo.load_checkpoint(filename='checkpoint_az66_okeru.pth.tar')
     fig=plt.figure(figsize=(3,3))
     ax=fig.add_subplot(111)
     plt.xlim(0, 6)
@@ -168,4 +171,4 @@ def vs_rand_demo():
             
 
 train_okeru()
-#vs_rand_demo()
+vs_rand_demo()
